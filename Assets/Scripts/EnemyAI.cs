@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.AI;
+using System.Collections;
 
 public class Enemy : MonoBehaviour, IDamageable
 {
@@ -9,6 +10,11 @@ public class Enemy : MonoBehaviour, IDamageable
     public float chaseRange = 10f;  // Enemy starts chasing the player when within this range
     public float attackRate = 1f;
     public GameObject weaponDropPrefab;
+
+    public bool shouldRespawn = true; // Set this to false if you don't want the enemy to respawn
+    public float respawnTime = 5f; // Delay before the enemy respawns
+    public Vector3 spawnPosition; // To store the original spawn position
+
 
     private float nextAttackTime = 0f;
     private Player player;
@@ -77,7 +83,33 @@ public class Enemy : MonoBehaviour, IDamageable
     {
         Debug.Log("Enemy died!");
         DropWeapon();
-        Destroy(gameObject);
+
+        if (shouldRespawn)
+        {
+            // Start respawn process
+            StartCoroutine(RespawnEnemy());
+        }
+        else
+        {
+            Destroy(gameObject); // Destroy the enemy permanently if no respawn is required
+        }
+    }
+
+    // Coroutine to respawn the enemy after a delay
+    private IEnumerator RespawnEnemy()
+    {
+        // Hide the enemy temporarily
+        gameObject.SetActive(false);
+
+        // Wait for the respawn delay
+        yield return new WaitForSeconds(respawnTime);
+
+        // Reset health and position
+        health = 50; // Reset health to full
+        transform.position = spawnPosition; // Reset position to the original spawn point
+
+        // Reactivate the enemy
+        gameObject.SetActive(true);
     }
 
     private void DropWeapon()
