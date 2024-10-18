@@ -1,22 +1,21 @@
-using System.Collections.Generic;
 using UnityEngine;
-using UnityEditor;
 
 public class GameManager : MonoBehaviour
 {
-    public static GameManager Instance;
+    public static GameManager Instance { get; private set; }
 
+    public GameObject playerPrefab;
     public GameObject enemyPrefab;
     public Transform[] spawnPoints;
-
-    private Player player;
-    private QLearningAgent globalQLearningAgent;  // Global Q-learning agent shared between enemies
+    public int initialEnemyCount = 3;
+    public float respawnDelay = 3f;
 
     private void Awake()
     {
         if (Instance == null)
         {
             Instance = this;
+            DontDestroyOnLoad(gameObject);
         }
         else
         {
@@ -26,23 +25,41 @@ public class GameManager : MonoBehaviour
 
     private void Start()
     {
-        player = GameObject.FindWithTag("Player").GetComponent<Player>();
-        globalQLearningAgent = new QLearningAgent(0.1f, 0.9f);  // Initialize the global Q-learning agent
-        globalQLearningAgent.Initialize();  // Initialize Q-table
+        InitializeGame();
     }
 
-    public Player GetPlayer()
+    private void InitializeGame()
     {
-        return player;
+        SpawnPlayer();
+        for (int i = 0; i < initialEnemyCount; i++)
+        {
+            SpawnEnemy();
+        }
+    }
+
+    private void SpawnPlayer()
+    {
+        if (playerPrefab != null)
+        {
+            GameObject playerObj = Instantiate(playerPrefab, Vector3.zero, Quaternion.identity);
+            Player player = playerObj.GetComponent<Player>();
+            if (player == null)
+            {
+                Debug.LogError("Player component not found on the instantiated player prefab!");
+            }
+        }
+        else
+        {
+            Debug.LogError("Player prefab not set in GameManager!");
+        }
     }
 
     public void OnEnemyKilled()
     {
         Debug.Log("Enemy killed!");
-        Invoke("SpawnEnemy", 3f);  // Respawn the enemy after 3 seconds
+        Invoke("SpawnEnemy", respawnDelay);
     }
 
-    // Spawns an enemy with access to the global Q-learning agent
     public void SpawnEnemy()
     {
         if (enemyPrefab != null && spawnPoints.Length > 0)
@@ -53,8 +70,10 @@ public class GameManager : MonoBehaviour
             GameObject newEnemy = Instantiate(enemyPrefab, spawnPoint.position, spawnPoint.rotation);
             Enemy enemyComponent = newEnemy.GetComponent<Enemy>();
 
-            // Pass the global Q-learning agent to the enemy so it uses improved strategies
-            enemyComponent.qLearningAgent = globalQLearningAgent;
+            if (enemyComponent == null)
+            {
+                Debug.LogError("Enemy component not found on the instantiated enemy prefab!");
+            }
         }
         else
         {

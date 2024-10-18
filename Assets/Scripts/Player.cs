@@ -1,56 +1,80 @@
 using UnityEngine;
 
-public class Player : MonoBehaviour
+public class Player : MonoBehaviour, IDamageable
 {
-    public int health = 100;
-    public float speed = 5f;
-    public float attackRange = 2f;
-    public int attackDamage = 20;
-
-    public Camera playerCamera; // Reference to the player's camera
+    [Header("Movement")]
+    public float moveSpeed = 5f;
+    // public float mouseSensitivity = 1f;
+    // private float xRotation = 0f; // For locking vertical rotation
     public float lookSpeed = 2f; // Speed of the mouse look
+    public float jumpForce = 5f;
+    public float gravity = -9.81f;
+
+    [Header("Ground Check")]
+    public Transform groundCheck;
+    public float groundDistance = 0f;
+    public LayerMask groundMask;
+
+    [Header("Combat")]
+    public int health = 100;
+    public float pickupRange = 3f;
+    public float unarmedDamage = 5f;
+    public float unarmedRange = 2f;
+    public float unarmedAttackRate = 1f;
+
+    [Header("References")]
+    public Camera playerCamera;
+
+    private CharacterController controller;
+    // private float verticalRotation = 0f;
+    private Vector3 velocity;
+    private bool isGrounded;
+    private WeaponManager weaponManager;
+    private float nextUnarmedAttackTime = 0f;
 
     private void Start()
     {
-        // Hide and lock the cursor
-        Cursor.lockState = CursorLockMode.Locked;
-        Cursor.visible = false;
+        Cursor.lockState = CursorLockMode.Locked; // Lock the cursor in the center of the screen
+        controller = GetComponent<CharacterController>();
+        
     }
 
     private void Update()
     {
         HandleMovement();
         HandleMouseLook();
-
-        if (Input.GetButtonDown("Fire1"))
-        {
-            Attack();
-        }
+        HandleJump();
+        HandleCombat();
+        HandleWeaponPickup();
     }
 
-    // Handle player movement
-    private void HandleMovement()
+    void HandleMovement()
     {
-        float moveHorizontal = Input.GetAxis("Horizontal");
-        float moveVertical = Input.GetAxis("Vertical");
+        float x = Input.GetAxis("Horizontal");
+        float z = Input.GetAxis("Vertical");
 
-        Vector3 forward = playerCamera.transform.forward;
-        Vector3 right = playerCamera.transform.right;
+        Vector3 move = transform.right * x + transform.forward * z;
 
-        forward.y = 0;
-        right.y = 0;
+        controller.Move(move * moveSpeed * Time.deltaTime);
 
-        forward.Normalize();
-        right.Normalize();
+        // Gravity Handling
+        isGrounded = Physics.CheckSphere(groundCheck.position, groundDistance, groundMask);
 
-        Vector3 movement = (forward * moveVertical + right * moveHorizontal).normalized;
-
-        if (movement.magnitude > 0)
+        if (isGrounded && velocity.y < 0)
         {
-            transform.Translate(movement * speed * Time.deltaTime, Space.World);
+            velocity.y = -2f;
         }
+
+        if (Input.GetButtonDown("Jump") && isGrounded)
+        {
+            velocity.y = Mathf.Sqrt(jumpForce * -2f * gravity);
+        }
+
+        velocity.y += gravity * Time.deltaTime;
+        controller.Move(velocity * Time.deltaTime);
     }
 
+    // This is for precise mouse look control with no sliding/spinning
     // Handle mouse look
     private void HandleMouseLook()
     {
@@ -61,19 +85,72 @@ public class Player : MonoBehaviour
         playerCamera.transform.Rotate(-mouseY, 0, 0);
     }
 
-    // Player attack logic
-    public void Attack()
+
+    void HandleJump()
     {
-        // Cast a sphere to detect enemies in attack range
-        Collider[] hitColliders = Physics.OverlapSphere(transform.position, attackRange);
-        foreach (Collider hitCollider in hitColliders)
+        isGrounded = Physics.CheckSphere(groundCheck.position, groundDistance, groundMask);
+
+        if (isGrounded && velocity.y < 0)
         {
-            Enemy enemy = hitCollider.GetComponent<Enemy>();
-            if (enemy != null)
+            velocity.y = -2f; // Reset y velocity if grounded
+        }
+
+        if (Input.GetButtonDown("Jump") && isGrounded)
+        {
+            velocity.y = Mathf.Sqrt(jumpForce * -2f * Physics.gravity.y);
+        }
+
+        velocity.y += Physics.gravity.y * Time.deltaTime;
+        controller.Move(velocity * Time.deltaTime);
+    }
+
+    void HandleCombat()
+    {
+        if (Input.GetButtonDown("Fire1"))
+        {
+            if (weaponManager.CurrentWeapon != null)
             {
-                // Deal damage to the enemy
-                enemy.TakeDamage(attackDamage);
-                Debug.Log("Enemy hit for " + attackDamage + " damage!");
+                weaponManager.CurrentWeapon.Fire();
+            }
+            else
+            {
+                UnarmedAttack();
+            }
+        }
+    }
+
+    void UnarmedAttack()
+    {
+        if (Time.time >= nextUnarmedAttackTime)
+        {
+            nextUnarmedAttackTime = Time.time + 1f / unarmedAttackRate;
+
+            RaycastHit hit;
+            if (Physics.Raycast(playerCamera.transform.position, playerCamera.transform.forward, out hit, unarmedRange))
+            {
+                Enemy enemy = hit.transform.GetComponent<Enemy>();
+                if (enemy != null)
+                {
+                    enemy.TakeDamage((int)unarmedDamage);
+                    Debug.Log("Unarmed attack hit enemy for " + unarmedDamage + " damage!");
+                }
+            }
+        }
+    }
+
+    void HandleWeaponPickup()
+    {
+        if (Input.GetKeyDown(KeyCode.E))
+        {
+            RaycastHit hit;
+            if (Physics.Raycast(playerCamera.transform.position, playerCamera.transform.forward, out hit, pickupRange))
+            {
+                WeaponPickup weaponPickup = hit.transform.GetComponent<WeaponPickup>();
+                if (weaponPickup != null)
+                {
+                    weaponManager.EquipWeapon(weaponPickup.WeaponPrefab);
+                    Destroy(weaponPickup.gameObject);
+                }
             }
         }
     }
@@ -81,17 +158,17 @@ public class Player : MonoBehaviour
     public void TakeDamage(int damage)
     {
         health -= damage;
+        Debug.Log("Player took " + damage + " damage! Remaining health: " + health);
+
         if (health <= 0)
         {
-            Debug.Log("Player died!");
-            // Handle player death (e.g., reload scene)
+            Die();
         }
     }
 
-    // Optional: To visualize the attack range in the editor
-    private void OnDrawGizmosSelected()
+    private void Die()
     {
-        Gizmos.color = Color.red;
-        Gizmos.DrawWireSphere(transform.position, attackRange);
+        Debug.Log("Player died!");
+        // Implement game over logic here
     }
 }
