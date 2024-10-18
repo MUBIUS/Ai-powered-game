@@ -1,15 +1,16 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEditor;
 
 public class GameManager : MonoBehaviour
 {
-    public static GameManager Instance { get; private set; }
+    public static GameManager Instance;
 
     public GameObject enemyPrefab;
-    public List<Enemy> enemies = new List<Enemy>();
+    public Transform[] spawnPoints;
 
-    public int waveNumber = 1;
-    public int enemiesPerWave = 5;
+    private Player player;
+    private QLearningAgent globalQLearningAgent;  // Global Q-learning agent shared between enemies
 
     private void Awake()
     {
@@ -25,54 +26,39 @@ public class GameManager : MonoBehaviour
 
     private void Start()
     {
-        SpawnEnemies(enemiesPerWave);
+        player = GameObject.FindWithTag("Player").GetComponent<Player>();
+        globalQLearningAgent = new QLearningAgent(0.1f, 0.9f);  // Initialize the global Q-learning agent
+        globalQLearningAgent.Initialize();  // Initialize Q-table
     }
 
-    // Player attack logic
-    public void HandlePlayerAttack(Player player)
+    public Player GetPlayer()
     {
-        foreach (Enemy enemy in enemies)
+        return player;
+    }
+
+    public void OnEnemyKilled()
+    {
+        Debug.Log("Enemy killed!");
+        Invoke("SpawnEnemy", 3f);  // Respawn the enemy after 3 seconds
+    }
+
+    // Spawns an enemy with access to the global Q-learning agent
+    public void SpawnEnemy()
+    {
+        if (enemyPrefab != null && spawnPoints.Length > 0)
         {
-            if (Vector3.Distance(player.transform.position, enemy.transform.position) <= player.attackRange)
-            {
-                enemy.TakeDamage(player.attackDamage);
-                break;
-            }
+            int randomIndex = Random.Range(0, spawnPoints.Length);
+            Transform spawnPoint = spawnPoints[randomIndex];
+
+            GameObject newEnemy = Instantiate(enemyPrefab, spawnPoint.position, spawnPoint.rotation);
+            Enemy enemyComponent = newEnemy.GetComponent<Enemy>();
+
+            // Pass the global Q-learning agent to the enemy so it uses improved strategies
+            enemyComponent.qLearningAgent = globalQLearningAgent;
         }
-    }
-
-    // Enemy attack logic
-    public void HandleEnemyAttack(Enemy enemy)
-    {
-        Player player = FindObjectOfType<Player>();
-        if (Vector3.Distance(enemy.transform.position, player.transform.position) <= enemy.attackRange)
+        else
         {
-            player.TakeDamage(enemy.damage);
-        }
-    }
-
-    // Spawn enemies at the start of each wave
-    private void SpawnEnemies(int numberOfEnemies)
-    {
-        for (int i = 0; i < numberOfEnemies; i++)
-        {
-            Vector3 spawnPosition = new Vector3(Random.Range(-10, 10), 0, Random.Range(-10, 10));
-            GameObject newEnemy = Instantiate(enemyPrefab, spawnPosition, Quaternion.identity);
-            Enemy enemyScript = newEnemy.GetComponent<Enemy>();
-            enemies.Add(enemyScript);
-        }
-    }
-
-    // Remove enemy from the game when dead
-    public void RemoveEnemy(Enemy enemy)
-    {
-        enemies.Remove(enemy);
-
-        // Check if all enemies are dead
-        if (enemies.Count == 0)
-        {
-            waveNumber++;
-            SpawnEnemies(enemiesPerWave + waveNumber);  // Increase the number of enemies per wave
+            Debug.LogError("Enemy prefab or spawn points not set up correctly!");
         }
     }
 }

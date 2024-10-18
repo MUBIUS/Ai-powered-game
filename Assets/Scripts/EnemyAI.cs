@@ -1,43 +1,72 @@
-using UnityEditor.Build.Content;
 using UnityEngine;
 
-public class Enemy : MonoBehaviour
+public class Enemy : MonoBehaviour, IDamageable
 {
-    public GameManager gameManager;
-    
     public int health = 50;
-    public float speed = 3f;
-    public int damage = 10;
-    public float attackRange = 2f;
+    public int attackDamage = 10;
+    public float attackRange = 2f; // Range for the enemy attack
+    public float learningRate = 0.1f;
+    public float discountFactor = 0.9f;
 
-    private Transform player;
+    public QLearningAgent qLearningAgent;
+    private int lastState;
+    private int lastAction;
+    private Player player;
 
     private void Start()
     {
-        player = GameObject.FindWithTag("Player").transform;  // Find player
+        qLearningAgent = new QLearningAgent(learningRate, discountFactor);
+        player = GameManager.Instance.GetPlayer();
     }
 
     private void Update()
     {
-        HandleMovement();
+        int currentState = GetCurrentState();
+        int action = qLearningAgent.ChooseAction(currentState);
 
-        if (Vector3.Distance(transform.position, player.position) <= attackRange)
+        PerformAction(action);
+        lastState = currentState;
+        lastAction = action;
+    }
+
+    private int GetCurrentState()
+    {
+        // You could base this on the player's position, distance, or other factors
+        float distanceToPlayer = Vector3.Distance(transform.position, player.transform.position);
+        return distanceToPlayer < attackRange ? 1 : 0;  // Simple example: 0 = far, 1 = close
+    }
+
+    private void PerformAction(int action)
+    {
+        switch (action)
         {
-            Attack();
+            case 0: MoveTowardsPlayer(); break;
+            case 1: AttackPlayer(); break;
+            case 2: Retreat(); break;
         }
     }
 
-    // Move towards the player
-    private void HandleMovement()
+    private void MoveTowardsPlayer()
     {
-        Vector3 direction = (player.position - transform.position).normalized;
-        transform.Translate(direction * speed * Time.deltaTime, Space.World);
+        // Logic for moving towards the player
+        transform.position = Vector3.MoveTowards(transform.position, player.transform.position, Time.deltaTime * 2);
     }
 
-    // Enemy attack logic
-    public void Attack()
+    private void AttackPlayer()
     {
-        GameManager.Instance.HandleEnemyAttack(this);
+        // Check if the player is within attack range
+        if (Vector3.Distance(transform.position, player.transform.position) <= attackRange)
+        {
+            // Damage the player
+            player.TakeDamage(attackDamage);
+            Debug.Log("Enemy attacked the player!");
+        }
+    }
+
+    private void Retreat()
+    {
+        // Logic for retreating from the player
+        transform.position = Vector3.MoveTowards(transform.position, -player.transform.position, Time.deltaTime * 2);
     }
 
     public void TakeDamage(int damage)
@@ -45,9 +74,14 @@ public class Enemy : MonoBehaviour
         health -= damage;
         if (health <= 0)
         {
-            Debug.Log("Enemy died!");
-            GameManager.Instance.RemoveEnemy(this);  // Notify GameManager to remove enemy
-            Destroy(gameObject);
+            Die();
         }
+    }
+
+    private void Die()
+    {
+        qLearningAgent.UpdateQTable(lastState, lastAction, -10, GetCurrentState());
+        GameManager.Instance.OnEnemyKilled();
+        Destroy(gameObject);
     }
 }
