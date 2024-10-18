@@ -32,12 +32,14 @@ public class Player : MonoBehaviour, IDamageable
     private WeaponManager weaponManager;
     private float nextUnarmedAttackTime = 0f;
 
-    private void Start()
-    {
-        Cursor.lockState = CursorLockMode.Locked; // Lock the cursor in the center of the screen
-        controller = GetComponent<CharacterController>();
-        
-    }
+    void Start()
+{
+    Cursor.lockState = CursorLockMode.Locked; // Lock the cursor in the center of the screen
+    controller = GetComponent<CharacterController>();
+
+    // Initialize weaponManager
+    weaponManager = GetComponent<WeaponManager>();
+}
 
     private void Update()
     {
