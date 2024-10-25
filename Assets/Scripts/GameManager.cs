@@ -30,7 +30,7 @@ public class GameManager : MonoBehaviour
 
     private void InitializeGame()
     {
-        SpawnPlayer();
+        
         for (int i = 0; i < initialEnemyCount; i++)
         {
             SpawnEnemy();

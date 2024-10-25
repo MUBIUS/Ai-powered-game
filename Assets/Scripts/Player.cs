@@ -1,11 +1,11 @@
 using UnityEngine;
-
+using UnityEngine.SceneManagement;
 public class Player : MonoBehaviour, IDamageable
 {
     [Header("Movement")]
     public float moveSpeed = 5f;
-    // public float mouseSensitivity = 1f;
-    // private float xRotation = 0f; // For locking vertical rotation
+    public float mouseSensitivity = 1f;
+    private float xRotation = 0f; // For locking vertical rotation
     public float lookSpeed = 2f; // Speed of the mouse look
     public float jumpForce = 5f;
     public float gravity = -9.81f;
@@ -24,6 +24,7 @@ public class Player : MonoBehaviour, IDamageable
 
     [Header("References")]
     public Camera playerCamera;
+    public Player player;
 
     private CharacterController controller;
     // private float verticalRotation = 0f;
@@ -78,15 +79,20 @@ public class Player : MonoBehaviour, IDamageable
 
     // This is for precise mouse look control with no sliding/spinning
     // Handle mouse look
-    private void HandleMouseLook()
+    void HandleMouseLook()
     {
-        float mouseX = Input.GetAxis("Mouse X") * lookSpeed;
-        float mouseY = Input.GetAxis("Mouse Y") * lookSpeed;
+        // Get mouse input
+        float mouseX = Input.GetAxis("Mouse X") * mouseSensitivity * Time.deltaTime;
+        float mouseY = Input.GetAxis("Mouse Y") * mouseSensitivity * Time.deltaTime;
 
-        transform.Rotate(0, mouseX, 0);
-        playerCamera.transform.Rotate(-mouseY, 0, 0);
+        // Calculate vertical rotation (for looking up/down)
+        xRotation -= mouseY;
+        xRotation = Mathf.Clamp(xRotation, -90f, 90f); // Clamp to avoid over-rotation
+
+        // Apply rotations
+        transform.localRotation = Quaternion.Euler(xRotation, 0f, 0f); // Vertical rotation
+        playerCamera.transform.Rotate(Vector3.up * mouseX); // Horizontal rotation (rotating the player body)
     }
-
 
     void HandleJump()
     {
@@ -168,9 +174,33 @@ public class Player : MonoBehaviour, IDamageable
         }
     }
 
+    public GameObject gameOverPanel; // Drag and drop the panel in the Inspector
+
     private void Die()
     {
         Debug.Log("Player died!");
-        // Implement game over logic here
+        
+        // Stop the game by freezing time
+        Time.timeScale = 0f; // Freeze time
+
+        // Show the Game Over panel
+        gameOverPanel.SetActive(true);
+        Cursor.lockState = CursorLockMode.Confined;
+
+        Cursor.visible = true;
+    }
+    
+    public void RetryGame()
+    {
+        // Unfreeze time and reload the current scene
+        Time.timeScale = 1f; // Resume time
+        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex); // Reload current scene
+    }
+
+    public void ReturnToMenu()
+    {
+        // Unfreeze time and load the menu scene
+        Time.timeScale = 1f; // Resume time
+        SceneManager.LoadScene("Menu"); // Load menu scene, replace "MenuScene" with the actual scene name
     }
 }
